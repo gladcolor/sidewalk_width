@@ -45,7 +45,7 @@ from shapely import speedups
 speedups.disable()
 # stackoverflow.com/questions/62075847/using-qgis-and-shaply-error-geosgeom-createlinearring-r-returned-a-null-pointer
 
-logging.basicConfig(filename='measurementing.log', level=logging.DEBUG)
+# logging.basicConfig(filename='measurementing.log', level=logging.INFO)
 
 LINE_COUNT = 160
 
@@ -1986,7 +1986,7 @@ def binaryMask2Polygon( binaryMask):
         polygons.append(contour)
     return polygons
 
-def merge_shp(shp_dir):
+def merge_shp(shp_dir, saved_file):
     files = glob.glob(os.path.join(shp_dir, "*.shp"))
     gdf_list = []
     for idx, file in tqdm(enumerate(files)):
@@ -1994,13 +1994,14 @@ def merge_shp(shp_dir):
             gdf = gpd.read_file(file)
             gdf_list.append(gdf)
         except Exception as e:
-            print("Error: ", str(e))
+            print("Error: ", str(e), idx, file)
+            logging.error(str(e), exc_info=True)
             continue
 
     print("Concatinng gdfs...")
 
-    all_gdf = gpd.GeoDataFrame(pd.concat(gdf_list, ignore_index=True), crs=gdf_list[0].crs)
-    all_gdf.to_file(r'H:\Research\sidewalk_wheelchair\DC_DOMs_roadsurface_merged.shp')
+    all_gdf = gpd.GeoDataFrame(pd.concat(gdf_list, ignore_index=True))
+    all_gdf.to_file(saved_file)
 
     print("Finished.")
 
@@ -2028,7 +2029,7 @@ if __name__ == "__main__":
     # test1()
     # cal_witdh()
     # get_all_widths()
-    get_all_widths_from_groud_truth()
+    # get_all_widths_from_groud_truth()
     # sidewalk_connect()
     # measurements_to_shapefile_mp()
     # img_path = r'ZXyk9lKhL5siKJglQPqfMA_DOM_0.05.tif'
@@ -2050,4 +2051,4 @@ if __name__ == "__main__":
     # get_centerline_from_img(img_path)
 
     # DOM_to_shapefile_mp(DOM_dir=r"H:\Research\sidewalk_wheelchair\DC_DOMs", class_idxs=[10, 16, 35], saved_path=r"H:\Research\sidewalk_wheelchair\DC_DOMs_roadsurface")
-    # merge_shp(shp_dir=r'H:\Research\sidewalk_wheelchair\DC_DOMs_roadsurface')
+    merge_shp(shp_dir=r'D:\Research\sidewalk_wheelchair\DC_DOMs_measuremens2', saved_file=r'H:\Research\sidewalk_wheelchair\width_measurements_raw.shp')
