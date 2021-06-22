@@ -742,6 +742,8 @@ def cal_witdh(img_path, df_yaw, crs_local=6847):
     img_rotated_color = cv2.merge((img_rotated, img_rotated, img_rotated))
 
     category_list = [58, 255]
+    category_list = [31, 37, 38, 42, 45, 46, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 255]
+
     raw_img_rotated = cv_img_rotate_bound(img_np, yaw_deg)
     # cv2.imshow("raw_img_rotated", raw_img_rotated)
 
