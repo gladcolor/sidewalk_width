@@ -43,6 +43,24 @@ from label_centerlines import get_centerline
 from shapely.geometry import Point, Polygon, mapping, LineString, MultiLineString
 from shapely import speedups
 from natsort import natsorted
+
+
+
+import os
+import glob
+import geopandas as gpd
+import pandas as pd
+from shapely.geometry import Point, LineString
+import matplotlib.pyplot as plt
+import shapely
+import numpy as np
+import math
+import sklearn
+from sklearn.cluster import KMeans
+from shapely import ops, geometry
+import random
+
+
 speedups.disable()
 # stackoverflow.com/questions/62075847/using-qgis-and-shaply-error-geosgeom-createlinearring-r-returned-a-null-pointer
 
@@ -98,7 +116,9 @@ def rle_encoding(x, keep_nearest=True):
 
     if keep_nearest:
         center_col = x.shape[1] / 2
-        keep_nearest_measurements(run_lengths, run_rows, center_col)
+        run_lengths\
+            +, run_rows = keep_nearest_measurements(run_lengths, run_rows, center_col)
+
     return run_lengths, run_rows
 
 def keep_nearest_measurements(run_lengths, run_rows, center_col):
@@ -253,7 +273,7 @@ def cal_witdh_from_list(img_list, crs_local=6847):
 
     while len(img_list) > 0:
         try:
-            img_path = img_list.pop()
+            img_path = img_list.pop(0)
             cnt = total_cnt - len(img_list)
             cnt += 1
             cal_witdh(img_path, df_yaw, crs_local=crs_local)
@@ -604,7 +624,10 @@ def cal_witdh_ground_truth(img_path, df_yaw, crs_local=6847):
         logging.error(str(e), exc_info=True)
 
 def cal_witdh(img_path, df_yaw, crs_local=6847):
-    saved_path = r'D:\Research\sidewalk_wheelchair\DC_DOMs_measuremens3'
+    saved_path = r'D:\Research\sidewalk_wheelchair\SVI_sidewalk_slice_0622'
+
+    if not os.path.exists(saved_path):
+        os.makedirs(saved_path)
 
     basename = os.path.basename(img_path)
     dirname = os.path.dirname(img_path)
@@ -640,7 +663,7 @@ def cal_witdh(img_path, df_yaw, crs_local=6847):
     # AOI = np.where(AOI == 0, 0, 1).astype(np.uint8)
 
     morph_kernel_open  = (5, 5)
-    morph_kernel_close = (10, 10)
+    morph_kernel_close = (11, 11)
     g_close = cv2.getStructuringElement(cv2.MORPH_RECT, morph_kernel_close)
     g_open  = cv2.getStructuringElement(cv2.MORPH_RECT, morph_kernel_open)
 
@@ -741,13 +764,22 @@ def cal_witdh(img_path, df_yaw, crs_local=6847):
     # all_pair_list = seg_contours(raw_contours[5:6], opened_color)
     img_rotated_color = cv2.merge((img_rotated, img_rotated, img_rotated))
 
-    category_list = [58, 255]
-    category_list = [31, 37, 38, 42, 45, 46, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 255]
+    # category_list = [58, 255]
+    #category_list = [31, 37, 38, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 255]
+    category_list = [37, 38, 45, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 255]
 
     raw_img_rotated = cv_img_rotate_bound(img_np, yaw_deg)
     # cv2.imshow("raw_img_rotated", raw_img_rotated)
 
     car_mask_np = create_mask(raw_img_rotated, category_list=category_list)
+
+    morph_kernel_open  = (15, 15)
+    morph_kernel_close = (5, 5)
+    g_close = cv2.getStructuringElement(cv2.MORPH_RECT, morph_kernel_close)
+    g_open  = cv2.getStructuringElement(cv2.MORPH_RECT, morph_kernel_open)
+    car_mask_np = cv2.morphologyEx(car_mask_np.astype(np.uint8), cv2.MORPH_OPEN, g_open)
+    car_mask_np = cv2.morphologyEx(car_mask_np, cv2.MORPH_CLOSE, g_close) # fill small gaps
+    car_mask_np = car_mask_np.astype(bool)
 
     # for l in centerlines:
     #     pts = l.coords.xy
@@ -806,6 +838,24 @@ def cal_witdh(img_path, df_yaw, crs_local=6847):
 
         end_x = end_points_transed[idx + 1][0]
         end_y = end_points_transed[idx + 1][1]
+
+        h, w = img_np.shape
+
+        edge_threshold = 3  # pixel
+        is_touched = all_pair_list[int(idx/2)][-1]
+        if col < edge_threshold or col > (w - edge_threshold - 1):
+            is_touched = True
+
+        if row < edge_threshold or row > (h - edge_threshold - 1):
+            is_touched = True
+
+        if end_x < edge_threshold or end_x > (w - edge_threshold - 1):
+            is_touched = True
+
+        if end_y < edge_threshold or end_y > (h - edge_threshold - 1):
+            is_touched = True
+
+        all_pair_list[int(idx/2)][-1] = is_touched
         # cv2.line(opened_color, (col, row), (end_x , end_y), (0, 0, 255), thickness=line_thickness)
         # cv2.line(im_dom,       (col, row), (end_x , end_y), (0, 0, 255), thickness=line_thickness)
         # cv2.circle(raw_AOI_color, (end_x, end_y), radius, (0, 255, 0), line_thickness)
@@ -839,6 +889,7 @@ def cal_witdh(img_path, df_yaw, crs_local=6847):
         length = all_pair_list[idx2][3] - all_pair_list[idx2][1]
         contour_num = all_pair_list[idx2][0]
         length = length * wf_resolution
+        length = abs(length)
         cover_ratio = all_pair_list[idx2][5]
         is_touched = all_pair_list[idx2][6]
 
@@ -1101,8 +1152,6 @@ def points_2D_rotated(points, angle_deg):
 def seg_contours(raw_contours, mask_np,  img_rotated, interval_pix=10, max_width_pix=50):
     contours = [np.squeeze(cont) for cont in raw_contours]
 
-
-
     # con = cv2.drawContours(opened_color_img, raw_contours, -1, (0, 255, 0), 2)
     # cv2.imshow("raw_contours", opened_color_img)
 
@@ -1129,9 +1178,12 @@ def seg_contours(raw_contours, mask_np,  img_rotated, interval_pix=10, max_width
             cols = contour[contour[:, 1] == row][:, 0]
             cols = np.sort(cols)
 
-            pair = get_pair_col(cols, centeral_col)
+            target_mask_np = np.logical_or(img_rotated, mask_np)
 
-            length = pair[1] - pair[0]
+            clip_row = target_mask_np[row:row+1, min(cols):max(cols) + 1]
+            pair = get_pair_col(cols, centeral_col, clip_row)
+
+            length = abs(pair[1] - pair[0])
 
             # Huan  !!
             # if (length > max_width_pix) and (idx2 > 0):
@@ -1146,13 +1198,13 @@ def seg_contours(raw_contours, mask_np,  img_rotated, interval_pix=10, max_width
 
             cover_ratio = -1
 
-            target_mask_np = np.logical_or(img_rotated, mask_np)
+
 
             cover_ratio = get_cover_ratio(int(np.mean(pair[0:2])), int(row), target_mask_np, width=length, height=length)
             # cover_ratio = 0
             cover_ratio_threshold = 0.5
 
-            all_pair_list.append((idx, pair[0], row, pair[1], row, cover_ratio, is_touched))
+            all_pair_list.append([idx, pair[0], row, pair[1], row, cover_ratio, is_touched])
             # pairs.append(pair)
         # all_pair_list
     # print("all_pair_list:", all_pair_list)
@@ -1238,9 +1290,17 @@ def check_touched(col, row, mask_np, width=6, height=1, threshold=6):
 
     is_touched = samples.sum() > threshold
 
+    # close to the edge:
+    edge_threshold = 3 # pixel
+    if col < edge_threshold or col > (mask_w - edge_threshold - 1):
+        is_touched = True
+
+    if row < edge_threshold or row > (mask_h - edge_threshold - 1):
+        is_touched = True
+
     return is_touched
 
-def get_pair_col(cols, central_col):
+def get_pair_col(cols, central_col, clip_row):
     '''
     Find out the start and end col from cols intersecting the horizontal row.
     :param cols: numpy 1-D array
@@ -1262,14 +1322,19 @@ def get_pair_col(cols, central_col):
     # Case 3: several parts, like intersecting with two fingers.
     # step a: find segments
     starts = []
+    lengths =[]
     prev = -2
     for col in cols:
         if col > (prev+1):
-            starts.extend((col,))
+            starts.extend((col, ))
+            lengths.extend((0, ))
+
+        lengths[-1] = col - starts[-1] # choose the widest one. NOT finished! Has bugs!
         prev = col
     if len(starts) == 1:
         starts.append(cols[-1])
 
+    # choose the slice nearest the road centerline. Has bugs! Should return all measurements!
     if starts[0] > central_col:
         left = starts[0]
         right = starts[1]
@@ -1277,7 +1342,22 @@ def get_pair_col(cols, central_col):
         left = starts[-2]
         right = starts[-1]
 
-    return left, right
+
+    # choose the widest one. NOT finished! Has bugs! Should return all measurements!
+    '''
+    run_lengths, run_rows = rle_encoding(clip_row, keep_nearest=False)
+
+    start_cols = run_lengths[::2]
+    lengths = run_lengths[1::2]
+
+    lengths_np = np.array(lengths)
+    max_idx = np.argmax(lengths_np)
+
+    left = cols[0] +  start_cols[max_idx]
+    right = left + lengths[max_idx] - 1
+    '''
+
+    return (left, right)
 
 
 def get_centerline_from_img(img_path):
@@ -1946,6 +2026,7 @@ def get_all_widths():
     DOM_dir = r'D:\Research\sidewalk_wheelchair\DC_DOMs'
     # DOM_dir = r'H:\Research\sidewalk_wheelchair\DC_DOMs'
     img_list = glob.glob(os.path.join(DOM_dir, '*DOM*.tif'))
+    img_list = natsorted(img_list)
     # img_list = [r'D:\Research\sidewalk_wheelchair\DC_DOMs\XzB9K8BHqMpZVKZR-E9MBw_DOM_0.05.tif']
     # img_list = [r'D:\Research\sidewalk_wheelchair\DC_DOMs\Jk7bEuZo5fzWeax42a0bSw_DOM_0.05.tif']
     # img_list = [r'D:\Research\sidewalk_wheelchair\DC_DOMs\Jk091JHY-Fnhv_ho_1Qqmg_DOM_0.05.tif']
@@ -2174,7 +2255,7 @@ def binaryMask2Polygon( binaryMask):
         polygons.append(contour)
     return polygons
 
-def merge_shp(shp_dir, saved_file) -> object:
+def merge_shp(shp_dir, saved_file):
     files = glob.glob(os.path.join(shp_dir, "*.shp"))
     gdf_list = []
     for idx, file in tqdm(enumerate(files)):
@@ -2187,15 +2268,17 @@ def merge_shp(shp_dir, saved_file) -> object:
             continue
 
     print("Concatinng gdfs...")
-
+    start_time = time.perf_counter()
     all_gdf = gpd.GeoDataFrame(pd.concat(gdf_list, ignore_index=True))
 
     print("Saving the shapefile...")
 
     # all_gdf.to_file(saved_file, driver="GPKG")
     all_gdf.to_file(saved_file)
+    end_time = time.perf_counter()
 
-    print("Finished.")
+
+    print(f"Finished. Spendt time: {end_time - start_time:.0f} seconds.")
 
 def split_DOM_by_points(img_file, shp_file, buffer_distance, saved_path, name_column, img_ext=".tif"):
     # note image and shp file should have the same projection!
@@ -2217,12 +2300,252 @@ def split_DOM_by_points(img_file, shp_file, buffer_distance, saved_path, name_co
             print(result.stdout)
 
 
+def filter_measurements(raw_df):
+    # 1) remove long measurements:
+    min_cover_ratio = 0.90  # for SVI
+    # min_cover_ratio = 0.6  # for ground truth
+
+    df = raw_df[raw_df["cover_rati"] > min_cover_ratio]
+
+    # 2) remove short measurements:
+    min_width = 0.4  # meters. Just keep widths > min_width
+    df = df[df["Shape_Leng"] > min_width]
+
+    # 3) remove far away measurements:
+    max_distance = 3
+    df = df[df["NEAR_DIST"] < max_distance]
+
+    # 4) remove occluded measurements by vehicles:
+    df = df[df["is_touched"] == 0]
+
+    return df
+
+def measure_width_mp():
+    # widths_file = r'E:\USC_OneDrive\OneDrive - University of South Carolina\Research\sidewalk_wheelchair\test_results\test_tiny_width.shp'
+    #widths_file = r'E:\USC_OneDrive\OneDrive - University of South Carolina\Research\sidewalk_wheelchair\results\SVI_sidewalk_slice_0620_no_walkway_short_occluded_less_fields.shp'
+    slice_file = r'D:\Research\sidewalk_wheelchair\Ground_Truth_data\GT_slices_0623_no_short_walkway_within20m_near_parallel_split.shp'
+    slice_file = r'D:\Research\sidewalk_wheelchair\0625\SVI_sidewalk_slices_0622_no_touch_short_for_width.shp'
+    widths_file = slice_file
+
+    print("Start to read width file:")
+
+    start_time = time.perf_counter()
+    gdf_widths = gpd.read_file(widths_file)
+    end_time = time.perf_counter()
+
+    print(f"End reading, time spent: {end_time - start_time: .2f}")
+
+    # gdf_widths['Shape_Leng'] = gdf_widths['geometry'].length
+
+    # sidewalk_network_file = r'E:\USC_OneDrive\OneDrive - University of South Carolina\Research\sidewalk_wheelchair\results\netwrok_split_rank061_3m_diss.shp'
+
+    sidewalk_network_file = r'D:\Research\sidewalk_wheelchair\Ground_Truth_data\GT_road_parallels_0624_split_at_intersection_ranked.shp'
+    sidewalk_network_file = r'D:\Research\sidewalk_wheelchair\0625\SVI_road_parallels_0625_split_at_intersection_ranked.shp'
+
+    gdf_road = gpd.read_file(sidewalk_network_file)
+
+
+    gdf_road['Shape_Leng'] = gdf_road['geometry'].length
+
+    gdf_road = gdf_road[gdf_road['length_ran'] == 1]
+
+    road_idxs = list(range(len(gdf_road)))[:]
+
+    process_cnt = 8
+
+    result_dict_list = mp.Manager().list()
+    result_geo_list = mp.Manager().list()
+
+    if process_cnt == 1:
+        measure_width(id_list=road_idxs, gdf=gdf_widths, gdf_road=gdf_road, id_column="rank_FID", result_dict_list=result_dict_list, result_geo_list=result_geo_list)
+
+    if process_cnt > 1:
+        id_list_mp = mp.Manager().list()
+        for i in road_idxs:
+            id_list_mp.append(i)
+
+        pool = mp.Pool(processes=process_cnt)
+        for i in range(process_cnt):
+            pool.apply_async(measure_width, args=(id_list_mp, gdf_widths,gdf_road, "rank_FID", result_dict_list, result_geo_list))
+
+        pool.close()
+        pool.join()
+
+    # print(parallels_df)
+    is_save = False
+    is_save = True
+
+    if is_save:
+
+        newlines_df = pd.DataFrame(list(result_dict_list))
+        newlines_gdf = gpd.GeoDataFrame(newlines_df, geometry=list(result_geo_list))
+        newlines_gdf = newlines_gdf.set_crs('epsg:6487')
+        if len(newlines_gdf) > 0:
+            newlines_gdf.to_file(
+                r"D:\Research\sidewalk_wheelchair\0625\SVI_road_parallels_0625_split_at_intersection_ranked_width.shp")
+
+            buffers_geo = newlines_gdf.buffer(newlines_df['wid_quan01'] / 2, cap_style=2)
+            buffers_gdf = gpd.GeoDataFrame(newlines_df, geometry=buffers_geo).set_crs('epsg:6487')
+            buffers_gdf.to_file(
+                r"D:\Research\sidewalk_wheelchair\0625\SVI_road_parallels_0625_split_at_intersection_ranked_width_buffer.shp")
+
+    print("Done.")
+
+def measure_width(id_list, gdf, gdf_road, id_column, result_dict_list, result_geo_list):
+    newlines_geo = result_geo_list
+    newlines_df = pd.DataFrame(columns={id_column: str,
+                                        'sw_ID': str,
+                                        'width_median': float,
+                                        'width_mean': float,
+                                        'width_kmean': float,
+                                        'wid_quan03': float,
+                                        'wid_quan02': float,
+                                        'wid_quan01': float,
+                                        'width_min': float,
+                                        'wid_count': int,
+                                        'count_raw': int,
+                                        'Shape_Leng': float,
+                                        })
+    # gdf_road['width_medi'] = -1
+    # gdf_road['width_kmea'] = -1
+    while len(id_list) > 0:
+        idx = id_list.pop(0)
+        row = gdf_road.iloc[idx]
+    # for idx, row in gdf_road.iterrows():
+        # print("row:\n", row)
+        try:
+
+            FID = row[id_column]
+            raw_df = gdf[gdf["NEAR_FID"] == FID]
+
+            if idx < 10:
+                print(f"Row # {idx}, {id_column}: {FID}")
+
+            # filter measurements:
+            df = filter_measurements(raw_df)
+
+            if len(df) == 0:
+                print(f"Road {id_column} = {idx} has 0 width measurement, skipped.")
+                continue
+
+            linestring = row['geometry']
+            df_road = gdf_road[gdf_road[id_column] == FID]
+
+            if isinstance(linestring, shapely.geometry.multilinestring.MultiLineString):
+                print(f"Row # {idx} is a multilinestring, converting to linestring.")
+                # print("linestring:", linestring)
+                coords_all = []
+                for line in linestring:
+                    coords_all += line.coords[:]
+                linestring = shapely.geometry.linestring.LineString(coords_all)
+
+            start_point = (linestring.xy[0][0], linestring.xy[1][1])
+            end_point = (linestring.xy[0][-1], linestring.xy[1][-1])
+
+            # road_direction = math.atan((-start_point[1] + end_point[1]) / (-start_point[0] + end_point[0]))
+            road_direction = math.atan2((-start_point[1] + end_point[1]), (-start_point[0] + end_point[0]))
+
+            road_direction = math.degrees(road_direction) % 360
+
+            mean_angle = df['NEAR_ANGLE'].mean()
+
+            dis = df['NEAR_DIST'].median()
+
+            # width1 = df[df['NEAR_ANGLE'] > mean_angle]['Shape_Leng'].quantile(0.2)
+            # width2 = df[df['NEAR_ANGLE'] < mean_angle]['Shape_Leng'].quantile(0.2)
+            # width1 = df1[df1['Shape_Leng'] > min_width]['Shape_Leng'].quantile(0.2)
+            # width2 = df2[df2['Shape_Leng'] > min_width]['Shape_Leng'].quantile(0.2)
+
+            # width1 = df1['Shape_Leng'].quantile(0.2)
+            # width2 = df2['Shape_Leng'].quantile(0.2)
+
+            width_median = df['Shape_Leng'].median()
+            width_quantile03 = df['Shape_Leng'].quantile(0.3)
+            width_quantile02 = df['Shape_Leng'].quantile(0.2)
+            width_quantile01 = df['Shape_Leng'].quantile(0.1)
+            width_mean = df['Shape_Leng'].mean()
+            width_kmean = -1
+
+            width_minimum = min(width_median, width_quantile02, width_mean)
+
+            # use Kmeans
+            width_list = np.array(df['Shape_Leng']).reshape(-1, 1)
+            if len(df) > 1:
+                kmean_w = KMeans(n_clusters=2, random_state=0, n_init=100, max_iter=500).fit(width_list)
+                width_kmean = kmean_w.cluster_centers_.min()
+
+                width_minimum = min(width_minimum, width_kmean)
+
+            if idx % 100 == 0:
+                print(f"Processing row #: ", idx)
+                print(f"Before filtering {len(raw_df)} rows, after filtering {len(df)} rows.")
+                print("road_direction:", road_direction)
+                print("width_kmeans:", width_kmean)
+
+            newlines_geo.append(row['geometry'])
+
+            df_line = {id_column: FID,
+                       'sw_ID': row['sw_ID'],
+                       'width_median': width_median,
+                       'width_mean': width_mean,
+                       'width_kmean': width_kmean,
+                       'wid_quan03': width_quantile03,
+                       'wid_quan02': width_quantile02,
+                       'wid_quan01': width_quantile01,
+                       'width_min': width_minimum,
+                       'wid_count': len(df),
+                       'count_raw': len(raw_df),
+                       'length': row['Shape_Leng']
+                       }
+
+            newlines_df = newlines_df.append(df_line, ignore_index=True)
+
+            result_dict_list.append(df_line)
+
+            if idx % 100 == 0:
+                print(f"Processing row #: ", idx)
+                print(f"Before filtering {len(raw_df)} rows, after filtering {len(df)} rows.")
+                print("road_direction:", road_direction)
+
+                print("new line:", df_line)
+
+            # is_draw = False
+            is_draw = True
+
+            fig_dir = r'D:\Research\sidewalk_wheelchair\0625\SVI_get_width_figures'
+            if not os.path.exists(fig_dir):
+                os.makedirs(fig_dir)
+
+            if (is_draw) and (idx % 100 == 0):
+                figure, ax = plt.subplots(figsize=(15, 15))
+
+                ax = df.plot(ax=ax)
+                ax.set_title(FID)
+                df_road.plot(ax=ax, color='black')
+
+                polygon = linestring.buffer(width_quantile02 / 2, cap_style=2)
+
+                ax.plot(*polygon.exterior.xy)
+
+                #ax.scatter(linestring.xy[0][0], linestring.xy[1][0])  # start points
+                # ax.scatter(linestring.xy[0][-1], linestring.xy[1][-1])
+
+                # print("start_point:", start_point)
+                # print("direction:", direction)
+
+                plt.axis("scaled")
+                #plt.show()
+                plt.savefig(os.path.join(fig_dir, f'{FID}.png'))
+        except Exception as e:
+            print("Error in idx:", idx, e)
+            continue
+
 
 if __name__ == "__main__":
     # test1()
     # cal_witdh()
-    # get_all_widths()
-    merge_shp(shp_dir=r'H:\Research\sidewalk_wheelchairs\DC_road_split_tiles_50m_measurements_no_thin', saved_file=r'E:\USC_OneDrive\OneDrive - University of South Carolina\Research\sidewalk_wheelchair\vectors\Sidewalks\ground_truth_widths.shp')
+    # get_all_widths()  # get sidewalk slice from DOM
+    # merge_shp(shp_dir=r'H:\Research\sidewalk_wheelchairs\DC_road_split_tiles_50m_measurements_no_thin', saved_file=r'D:\Research\sidewalk_wheelchair\results\GT_slices_no_thin_0623.shp')
     # get_all_widths_from_groud_truth()
     # sidewalk_connect()
     # measurements_to_shapefile_mp()
@@ -2245,3 +2568,5 @@ if __name__ == "__main__":
     # get_centerline_from_img(img_path)
 
     # DOM_to_shapefile_mp(DOM_dir=r"H:\Research\sidewalk_wheelchair\DC_DOMs", class_idxs=[10, 16, 35], saved_path=r"H:\Research\sidewalk_wheelchair\DC_DOMs_roadsurface")
+
+    measure_width_mp()
