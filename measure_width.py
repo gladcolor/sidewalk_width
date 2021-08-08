@@ -2574,6 +2574,8 @@ def get_delta_h(point_list, lengths, observation_df, df_dem_diff_degree_pair0, d
             try:
                 # for j in range(i):
                 from_pano = measurements_df.iloc[i]['dem_pano']
+                from_row = measurements_df.iloc[i]['row']
+                from_col = measurements_df.iloc[i]['col']
                 from_dict = lengths.get(from_pano, None)
                 if from_dict == None:
                     print(f"    Have not found this from_pano in the lengths: {from_pano}")
@@ -2587,6 +2589,8 @@ def get_delta_h(point_list, lengths, observation_df, df_dem_diff_degree_pair0, d
                         continue
                     row_cnt = len(df_dem_diff_degree_pair)
                     to_pano = measurements_df.iloc[j]['dem_pano']
+                    to_row = measurements_df.iloc[j]['row']
+                    to_col = measurements_df.iloc[j]['col']
                     # print("        ", from_pano, to_pano)
 
                     delta_h = abs(from_dem - measurements_df.iloc[j]['dem_value'])
@@ -2599,6 +2603,11 @@ def get_delta_h(point_list, lengths, observation_df, df_dem_diff_degree_pair0, d
                     df_dem_diff_degree_pair.loc[row_cnt, 'to_pano'] = to_pano
                     df_dem_diff_degree_pair.loc[row_cnt, 'degree'] = degree
                     df_dem_diff_degree_pair.loc[row_cnt, 'delta_h'] = delta_h
+
+                    df_dem_diff_degree_pair.loc[row_cnt, 'from_row'] = from_row
+                    df_dem_diff_degree_pair.loc[row_cnt, 'from_col'] = from_col
+                    df_dem_diff_degree_pair.loc[row_cnt, 'to_row'] = to_row
+                    df_dem_diff_degree_pair.loc[row_cnt, 'to_col'] = to_col
 
             except Exception as e:
                 print("Error in ", point_id, e)
@@ -2617,11 +2626,18 @@ def get_delta_h_mp():
                     'to_pano': pd.Series([], dtype='str'),
                     'degree': pd.Series([], dtype='int'),
                     'delta_h': pd.Series([], dtype='float'),
+         'from_row': pd.Series([], dtype='int'),
+         'from_col': pd.Series([], dtype='int'),
+         'to_row': pd.Series([], dtype='int'),
+         'to_col': pd.Series([], dtype='int'),
                     })
-    lengths_file = r'K:\OneDrive_USC\OneDrive - University of South Carolina\Research\sidewalk_wheelchair\DEM_consistency\neighbors_lengths.json'
+    # lengths_file = r'K:\OneDrive_USC\OneDrive - University of South Carolina\Research\sidewalk_wheelchair\DEM_consistency\neighbors_lengths.json'
+    lengths_file = r'H:\USC_OneDrive\OneDrive - University of South Carolina\Research\sidewalk_wheelchair\DEM_consistency\neighbors_lengths.json'
     lengths = json.load(open(lengths_file, 'r'))
+    # observation_df = pd.read_csv(
+    #     r'K:\OneDrive_USC\OneDrive - University of South Carolina\Research\sidewalk_wheelchair\DEM_consistency\GSV_DEM_measure_points_DEM_values_degrees.csv')
     observation_df = pd.read_csv(
-        r'K:\OneDrive_USC\OneDrive - University of South Carolina\Research\sidewalk_wheelchair\DEM_consistency\GSV_DEM_measure_points_DEM_values_degrees.csv')
+        r'H:\USC_OneDrive\OneDrive - University of South Carolina\Research\sidewalk_wheelchair\DEM_consistency\GSV_DEM_measure_points_DEM_values_degrees.csv', nrows=999)
     observation_df = observation_df.set_index('point_id')
 
 
@@ -2640,7 +2656,7 @@ def get_delta_h_mp():
 
     print("Finished data loading, started processing data...")
 
-    process_cnt = 10
+    process_cnt = 4
 
     if process_cnt == 1:
         get_delta_h(point_list_mp, lengths, observation_df, df_dem_diff_degree_pair0, df_dem_diff_degree_pair_list_mp)
@@ -2653,9 +2669,16 @@ def get_delta_h_mp():
 
     df_dem_diff_degree_pair_all = pd.concat(df_dem_diff_degree_pair_list_mp)
     df_dem_diff_degree_pair_all['degree'] = df_dem_diff_degree_pair_all['degree'].astype(int)
-    df_dem_diff_degree_pair_all.to_csv(
-        r'K:\OneDrive_USC\OneDrive - University of South Carolina\Research\sidewalk_wheelchair\DEM_consistency\neighbor_pair_degrees_delta_h.csv',
-        index=False)
+    df_dem_diff_degree_pair_all['from_row'] = df_dem_diff_degree_pair_all['from_row'].astype(int)
+    df_dem_diff_degree_pair_all['from_col'] = df_dem_diff_degree_pair_all['from_col'].astype(int)
+    df_dem_diff_degree_pair_all['to_row'] = df_dem_diff_degree_pair_all['to_row'].astype(int)
+    df_dem_diff_degree_pair_all['to_col'] = df_dem_diff_degree_pair_all['to_col'].astype(int)
+    df_dem_diff_degree_pair_all['delta_h'] = df_dem_diff_degree_pair_all['delta_h'].round(4)
+    new_name = r'H:\USC_OneDrive\OneDrive - University of South Carolina\Research\sidewalk_wheelchair\DEM_consistency\neighbor_pair_degrees_delta_h.csv'
+    new_dir = os.path.dirname(new_name)
+    if not os.path.exists(new_dir):
+        os.makedirs(new_dir)
+    df_dem_diff_degree_pair_all.to_csv(new_name, index=False)
 
     print("Finished.")
 
