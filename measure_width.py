@@ -14,8 +14,8 @@ sys.path.append(r'E:\USC_OneDrive\OneDrive - University of South Carolina\Street
 sys.path.append(r'K:\OneDrive_USC\OneDrive - University of South Carolina\StreetView\gsv_pano')
 
 import geopandas as gpd
-from pano import GSV_pano
-import utils
+# from pano import GSV_pano
+# import utils
 from numpy import linalg as LA
 from PIL import Image
 import time
@@ -39,7 +39,7 @@ from shapely.geometry import Polygon
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 
-from label_centerlines import get_centerline
+# from label_centerlines import get_centerline
 from shapely.geometry import Point, Polygon, mapping, LineString, MultiLineString
 from shapely import speedups
 from natsort import natsorted
@@ -64,6 +64,9 @@ import random
 speedups.disable()
 # stackoverflow.com/questions/62075847/using-qgis-and-shaply-error-geosgeom-createlinearring-r-returned-a-null-pointer
 
+# logging.basicConfig(filename='measurementing.log', level=logging.INFO)
+logger = logging.getLogger()
+logger.disabled = True
 logging.basicConfig(filename='measurementing.log', level=logging.INFO)
 
 LINE_COUNT = 160
@@ -2687,3 +2690,5 @@ if __name__ == "__main__":
     # measure_width_mp()
 
     get_delta_h_mp()
+
+    # merge_shp(shp_dir=r'C:\DC_DOMs_width_shapes', saved_file=r'H:\Research\sidewalk_ffsdsdfwheelchair\width_measurements_raw.shp')
